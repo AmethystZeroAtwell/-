@@ -1,0 +1,1413 @@
+import java.util.*;
+
+/*board 初始化是为0的 ,如果有数字就放入号码*/ 
+
+class STONE {
+	public int Position = -1;
+	public boolean IsExist = false;
+	public int Distance = 0;
+}
+
+public class Einstein {
+	/**
+	 * DISTANCE 是每个位置到目标的距离   蓝色是这个数字本身  绿色是24减去这个数字
+	 * 原理:因为可以斜着走
+	 */
+	final int DISTANCE[] = { 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 4, 3, 2, 2, 2, 4, 3, 2, 1, 1, 4, 3, 2, 1, 0 };
+	public Random random;
+	public int Board[];
+	public STONE Stone[];
+
+	Einstein() {
+		Board = new int[25];
+		Stone = new STONE[13];
+		random = new Random();
+		for (int i = 0; i < 13; i++) {
+			Stone[i] = new STONE();
+		}
+		InitBoard();
+		Init();
+	}
+
+	void InitBoard() {
+
+		int i = 0;
+		int cn[] = { 1, 2, 3, 4, 5, 6 };			//电脑
+		int hn[] = { 1, 2, 3, 4, 5, 6 };			//玩家
+		int cPos[] = { 0, 1, 2, 5, 6, 10 };			//电脑所处的位置
+		int hPos[] = { 14, 18, 19, 22, 23, 24 };	//玩家所处的位置
+		
+		for (i = 0; i < 25; i++) {
+			Board[i] = 0;
+		}
+
+		i = 0;
+		/* 初始化棋盘:
+		 * 		在cpos或者hpos的位置,生成0-6的数字,有一个"hash数组"如果这个数字被生成过那么他就是0,不为零继续生成
+		*/
+		int Rand = random.nextInt(6);
+
+		while (i < 6) {
+			
+			if (cn[Rand] != 0) {
+				Board[cPos[i]] = cn[Rand];
+				cn[Rand] = 0;
+				i++;
+			}
+			Rand = random.nextInt(6);
+		}
+		
+		// 初始化玩家方棋盘
+		Rand = random.nextInt(6);
+		i = 0;
+		while (i < 6) {
+			if (hn[Rand] != 0) {
+				Board[hPos[i]] = hn[Rand] + 6;		//玩家数字是从7-12
+				hn[Rand] = 0;
+				i++;
+			}
+			Rand = random.nextInt(6);
+		}
+	}
+
+	/**
+	 * 在控制界面绘制出初始
+	 * */
+	public void Print() {
+		for (int i = 0; i < 25; i++) {
+			if (Board[i] != 0) {
+				if (Board[i] < 7) {
+					System.out.print(" --B" + Board[i] + "-- ");
+				} else {
+					System.out.print(" --G" + (Board[i] - 6) + "-- ");
+				}
+			} else {
+				System.out.print(" ------ ");
+			}
+			if ((i + 1) % 5 == 0) {
+				System.out.println();
+			}
+		}
+		System.out.println();
+	}
+
+	
+	public void setBoard(int[] board) {
+		for (int i = 0; i < 25; i++) {
+			Board[i] = board[i];
+		}
+		Init();
+	}
+
+	public int[] getBoard() {
+		return Board;
+	}
+
+	
+	/**
+	 * 更新位置,是否存在,目标距离
+	 */
+	public void Init() {
+		for (int i = 0; i < 25; i++) {
+			/*棋子肯定在棋盘上,所以遍历棋盘,如果第i个棋盘位置上有棋子,那么用棋子的位置记住这个位置,0的话不管他*/
+			/*Board[i]=0代表这个位置没有棋,如果大于零,就代表是棋子的号码  i是棋盘的位置*/
+			Stone[Board[i]].Position = i;		
+			Stone[Board[i]].IsExist = Board[i] > 0 ? true : false;
+			
+			/*因为蓝色要去25 绿色要去0 棋子号小于7就是蓝色 i就是距离  棋子号大于7就是绿色 用24-位置*/
+			Stone[Board[i]].Distance = Board[i] < 7 ? DISTANCE[i] : DISTANCE[24 - i];
+		}
+	}
+
+	public int GetBlueDice() {
+		return random.nextInt(6 * 100000) % 6 + 1;			//返回一个随机的1-6数字
+	}
+
+	public int GetGreenDice() {
+		return random.nextInt(6 * 100000) % 6 + 7;			//返回一个随机的7-12的数字
+	}
+
+	/*如果绿子不存在或者第24号位置(右下角)为蓝子 ,则蓝色赢*/
+	public boolean IsBlueWin() {
+		return ((Board[24] < 7 && Board[24] > 0) || (!Stone[7].IsExist && !Stone[8].IsExist && !Stone[9].IsExist
+				&& !Stone[10].IsExist && !Stone[11].IsExist && !Stone[12].IsExist));
+	}
+
+	public boolean IsGreenWin() {
+		return ((Board[0] > 6) || (!Stone[1].IsExist && !Stone[2].IsExist && !Stone[3].IsExist && !Stone[4].IsExist
+				&& !Stone[5].IsExist && !Stone[6].IsExist));
+	}
+
+	/**
+	 * 判断蓝色从from到to是否有效
+	 * 输入:色子号(将要移动的棋子),起点终点
+	 * 返回值:能否移动(是否是三个位置之一,并考虑边界情况,还有dice不存在的情况)*/
+	public boolean IsBlueVaild(int Dice, int moveFrom, int moveTo) {
+		int m = Dice;
+
+		if (moveTo > 24 || moveFrom < 0)
+			return false;
+//		查找大于或等于骰子数Dice的第一个骰子
+//		如果不存在才会进入循环体,并且先向上查找,等于7的时候他的位置肯定不等于要移动的form
+		while (m < 7 && !Stone[m].IsExist) {
+			m++;
+		}
+
+		if (Stone[m].Position == moveFrom) {
+			if (moveFrom > 19 && moveFrom < 25) {
+				return moveTo == moveFrom + 1;
+			} else if ((moveFrom + 1) % 5 == 0) {
+				return moveTo == moveFrom + 5;
+			} else {
+				return ((moveTo - moveFrom == 1) || (moveTo - moveFrom == 5) || (moveTo - moveFrom == 6));
+			}
+		}
+
+		int n = Dice;
+		// 查找小于等于骰子数Dice的第一个骰子
+		while (n > 0 && !Stone[n].IsExist) {
+			n--;
+		}
+
+		if (Stone[n].Position == moveFrom) {
+			if (moveFrom > 19 && moveFrom < 25) {		//在最后一行就只能向右
+				return moveTo == moveFrom + 1;
+			} else if ((moveFrom + 1) % 5 == 0) {		//在最右边就只能向下走
+				return moveTo == moveFrom + 5;
+			} else {
+				return ((moveTo - moveFrom == 1) || (moveTo - moveFrom == 5) || (moveTo - moveFrom == 6)); //是不是三个方向
+			}
+		}
+
+		return false;
+	}
+
+	/*改进:可以将蓝色棋子和绿色棋子作为一个参数,绿色棋子不过是比蓝色棋子多6!!!!!!!!!1*/
+	public boolean IsGreenVaild(int Dice, int moveFrom, int moveTo) {
+		int m = Dice;
+		if (moveTo < 0 || moveFrom > 24)
+			return false;
+		// 查找大于或等于骰子数Dice的第一个骰子
+		while (m < 13 && !Stone[m].IsExist) {
+			m++;
+		}
+		if (m < 13 && Stone[m].Position == moveFrom) {
+			if (moveFrom < 5 && moveFrom >= 0) {
+				return moveTo == moveFrom - 1;
+			} else if (moveFrom % 5 == 0) {
+				return moveTo == moveFrom - 5;
+			} else {
+				return ((moveTo - moveFrom == -1) || (moveTo - moveFrom == -5) || (moveTo - moveFrom == -6));
+			}
+		}
+
+		int n = Dice;
+		// 查找小于等于骰子数Dice的第一个骰子
+		while (n > 6 && !Stone[n].IsExist) {
+			n--;
+		}
+
+		if (n > 6 && Stone[n].Position == moveFrom) {
+			if (moveFrom < 5 && moveFrom >= 0) {
+				return moveTo == moveFrom - 1;
+			} else if (moveFrom % 5 == 0) {
+				return moveTo == moveFrom - 5;
+			} else {
+				return ((moveTo - moveFrom == -1) || (moveTo - moveFrom == -5) || (moveTo - moveFrom == -6));
+			}
+		}
+		return false;
+	}
+
+	 
+	/**
+	 * 修改Stone的值(是否存在,目标距离,位置信息)
+	 * 修改Board的值(原来的位置设为0,目标位置设置为棋号)
+	 */
+	public void MakeMove(int moveFrom, int moveTo) {
+		Stone[Board[moveTo]].IsExist = false;			//无论如何要到达的地方的棋子一定不存在了
+		
+		/*把这个棋的距离设置成目标位置的距离(要考虑一下是蓝色还是绿色,蓝色是目标小于起始*/
+		Stone[Board[moveFrom]].Distance = moveTo > moveFrom ? DISTANCE[moveTo] : DISTANCE[24 - moveTo];
+		/*Tips:可以把Board看成 get棋号,给一个位置,得到棋号,没有就返回0*/
+		Stone[Board[moveFrom]].Position = moveTo;		//把这个棋的位置设置成目标位置
+
+		// 更新棋盘信息
+		Board[moveTo] = Board[moveFrom];
+		Board[moveFrom] = 0;
+	}
+
+	/*```````````````````````````````````````````````````````````````````````````````````````````````````````````````````````*/	
+	public void UnMakeMove(int FromDice, int ToDice, int DiceFrom, int DiceTo) {
+		Stone[FromDice].Position = DiceFrom;
+		Stone[ToDice].Position = DiceTo;
+
+		Board[DiceFrom] = FromDice;
+		Board[DiceTo] = ToDice;
+
+		Stone[FromDice].IsExist = FromDice != 0 ? true : false;
+		Stone[ToDice].IsExist = ToDice != 0 ? true : false;
+
+		Stone[FromDice].Distance = FromDice < 7 ? DISTANCE[DiceFrom] : DISTANCE[24 - DiceFrom];
+		Stone[ToDice].Distance = FromDice < 7 ? DISTANCE[DiceTo] : DISTANCE[24 - DiceTo];
+	}
+
+	
+	/*计算期望距离,使所有棋子的期望距离之和最小*/
+	
+	
+	
+	/**/
+	public int BlueEval() {
+		
+		int BlueDistance = 0; // 电脑方的期望距离
+		int GreenDistance = 0; // 玩家方的期望距离
+		int n = 1, m = 0;
+
+		// 寻找棋盘上电脑方存在的最小的骰子
+		while (n < 7 && !Stone[n].IsExist) {
+			n++;
+		}
+
+		// 将最小骰子距离终点的距离*至少所拥有的概率加入电脑方的期望距离?
+		BlueDistance += Stone[n].Distance * (n - 1);			
+
+		
+		
+		while (true) {
+			// 寻找棋盘上电脑方大于n的骰子
+			m = n + 1;
+			while (m < 7 && !Stone[m].IsExist) {
+				m++;
+			}
+
+			// 根据骰子m和骰子n的距离大小，进行计算，并更新电脑方距离
+			if (m <= 6 && Stone[m].Distance > Stone[n].Distance) {
+				BlueDistance += (m - n) * Stone[n].Distance;
+			} else if (m <= 6 && Stone[m].Distance <= Stone[n].Distance) {
+				BlueDistance += Stone[n].Distance;
+				BlueDistance += Stone[m].Distance * (m - n - 1);
+			} else if (m == 7) {
+				BlueDistance += Stone[n].Distance * (7 - n);
+				break; // 棋盘上电脑方所有骰子搜索完毕，结束搜索，跳出循环
+			}
+			n = m; // 更新电脑方最小骰子n
+		}
+
+
+		n = 7;
+		m = 0;
+		while (n < 13 && !Stone[n].IsExist) // 寻找棋盘上玩家方骰子数最小的骰子
+		{
+			n++;
+		}
+		// 将最小骰子距离终点的距离*至少所拥有的概率加入玩家方的期望距离
+		GreenDistance += Stone[n].Distance * (n - 7);
+		while (true) {
+			// 寻找棋盘上玩家方大于n的骰子
+			m = n + 1;
+			while (m < 13 && !Stone[m].IsExist) {
+				m++;
+			}
+			// 根据骰子m和骰子n的距离大小，进行计算，并更新玩家方距离
+			if (m <= 12 && Stone[m].Distance > Stone[n].Distance) {
+				GreenDistance += (m - n) * Stone[n].Distance;
+			} else if (m <= 12 && Stone[m].Distance <= Stone[n].Distance) {
+				GreenDistance += Stone[n].Distance;
+				GreenDistance += Stone[m].Distance * (m - n - 1);
+			} else if (m == 13) {
+				GreenDistance += Stone[n].Distance * (13 - n);
+				break; // 棋盘上电脑方所有骰子搜索完毕，结束搜索，跳出循环
+			}
+			n = m; // 更新玩家方最小骰子n
+		}
+
+		return BlueDistance - GreenDistance; // 返回电脑方期望距离与玩家方的期望距离之差
+	}
+
+	public int GreenEval() {
+		return -BlueEval();
+	}
+}
+    public class GameThread implements Runnable   
+    {   
+        public McSearch search;   
+        public MoveListAndCount Move;   
+        private int Dice;   
+        private int Num;   
+           
+        GameThread()   
+        {   
+            search = new McSearch();   
+            Move = new MoveListAndCount();   
+        }   
+        public void setBoard(int[] board)   
+        {   
+            search.setBoard(board);    
+        }   
+           
+        public void SetDice(int Dice)   
+        {   
+            this.Dice = Dice;   
+        }   
+        public void SetGameNum(int Num)   
+        {   
+            this.Num = Num;   
+        }   
+        public MoveListAndCount ReturnMove()   
+        {   
+            return this.Move;   
+        }   
+        public void run()   
+        {   
+            this.Move = search.BlueMcEval(Dice,Move,Num);   
+        }  
+    }
+    
+class MoveList   
+    {   
+        public int From;   
+        public int To;   
+    }   
+ 
+    /**
+     *   变量:移动列表(from 和 to) 并计算 
+     * @author 小瀚学长
+     *
+     */
+    class MoveListAndCount   
+    {   
+        public MoveList moveList = new MoveList();   
+        public int Count = 0;   
+    }   
+     /**
+      *  存储权重和这个权重的move  
+      * @author 小瀚学长
+      *
+      */
+    class Sum   
+    {   
+        public int WinSum = 0;   
+        public MoveList Move = new MoveList();   
+    }   
+    
+    
+    public class McSearch extends Einstein   
+    {   
+        private final int pos[] = {6,5,1};   //下一个位置只能是当前位置的 6,5,1
+        private int CBoard[];   
+        public MoveList[] BlueMoveList = new MoveList[6]; //当这个点不存在时候,大于他小于他各三种情况所以最大6
+        public MoveList[] GreenMoveList = new MoveList[6];   
+        public Sum[] Num = new Sum[6];   		//存储每种情况的权重和(Sum是一个包含了一个int值得结构体)
+        McSearch()   
+        {   
+            CBoard = new int[25];   
+            for(int i=0;i<6;i++)   
+            {   
+                Num[i] = new Sum();   
+                BlueMoveList[i] = new MoveList();   
+                GreenMoveList[i] = new MoveList();   
+            }   
+            CopyBoard();   
+        }   
+        /**
+         * 	更新Cboard 把board的 值赋给cboard   
+         */
+        public void CopyBoard()   
+        {   
+            for(int i=0;i<25;i++)   
+            {   
+                CBoard[i] = Board[i];   
+            }   
+        }   
+           
+        /**
+         *  把CBoard的值再赋值给Board,并执行init初始化函数
+         */
+        public void UnCopyBoard()   
+        {   
+            for(int i=0;i<25;i++)   
+            {   
+                Board[i] = CBoard[i];   
+            }   
+            Init(); //更新  
+        }   
+       
+        public MoveListAndCount CreateBlueRandMove(int Dice,MoveListAndCount Move)   
+        {   
+            Move = BlueAloneMove(Dice,Move);   
+            if(Move.Count ==0 || Move.Count == 1)   
+            {   
+                Move.Count = 1;   
+                return Move;   
+            }   
+            int Rand = random.nextInt(Move.Count);   
+            Move.moveList = BlueMoveList[Rand];   
+            return Move;   
+        }   
+           
+        public MoveListAndCount CreateGreenRandMove(int Dice,MoveListAndCount Move)   
+        {   
+            Move = GreenAloneMove(Dice,Move);   
+            if(Move.Count ==0 || Move.Count == 1)   
+            {   
+                Move.Count = 1;   
+                return Move;   
+            }   
+            int Rand = random.nextInt(Move.Count);   
+            Move.moveList = GreenMoveList[Rand];   
+            return Move;   
+        }   
+           
+        /**
+         *   对于Dice号棋子,如果存在,返回这个棋子的Move参数走法,如果不存在,返回(min(走比他小的号的棋子的走法,比他大的号棋走法)
+         */
+        public MoveListAndCount CreateBlueMove(int Dice,MoveListAndCount Move)   
+        {   
+            int m = Dice;
+            int i,min = 100,eval;   
+            
+            while(m < 7 && !Stone[m].IsExist)   
+            {   
+                m++;   
+            }
+            
+            if(m < 7)   
+            {   
+                for(i=0;i<3;i++)   
+                {   /*m是棋子标号,从棋子的位置,到三个可能方向,判断三个方向可不可以走*/
+                    if(IsBlueVaild(m,Stone[m].Position,Stone[m].Position + pos[i]))   
+                    {   
+                    	int DiceFrom = Stone[m].Position;   
+                        int ToDice = Board[Stone[m].Position + pos[i]];
+                        
+                        /*尝试走一下看看下一步能不能赢*/	
+                        MakeMove(Stone[m].Position,Stone[m].Position + pos[i]);   
+                        if(IsBlueWin())   //判断修改之后蓝色赢没赢
+                        {   
+                            UnMakeMove(m,ToDice,DiceFrom,DiceFrom + pos[i]);   
+                            Move.moveList.From =  Stone[m].Position;   
+                            Move.moveList.To = Move.moveList.From + pos[i];   
+                            return Move;   
+                        }
+                        
+                        eval = BlueEval();  //看一下这么走后的棋盘权重和 
+                        UnMakeMove(m,ToDice,DiceFrom,DiceFrom + pos[i]);   
+                        
+                        if(min > eval)   
+                        {   
+                            min = eval;   
+                            Move.moveList.From = Stone[m].Position;   
+                            Move.moveList.To = Stone[m].Position + pos[i];   
+                        }   
+                    }   
+                }   
+            }
+            
+            /*考虑比这个号小的情况,上下选出一个最小的*/
+            int n = Dice;   
+            while(n > 0 && !Stone[n].IsExist)   
+            {   
+                n--;   
+            }
+            
+            if(m!=Dice && n>0)   
+            {   
+                for(i=0;i<3;i++)   
+                {   
+                    if(IsBlueVaild(n,Stone[n].Position,Stone[n].Position + pos[i]))   
+                    {   
+                        int ToDice = Board[Stone[n].Position + pos[i]],DiceFrom = Stone[n].Position;   
+                        MakeMove(Stone[n].Position,Stone[n].Position + pos[i]);   
+                        if(IsBlueWin())   
+                        {   
+                            UnMakeMove(n,ToDice,DiceFrom,DiceFrom + pos[i]);   
+                            Move.moveList.From =  Stone[n].Position;   
+                            Move.moveList.To = Move.moveList.From + pos[i];   
+                            return Move;   
+                        }   
+                        eval = BlueEval();   
+                        UnMakeMove(n,ToDice,DiceFrom,DiceFrom + pos[i]);   
+                        if(min > eval)   
+                        {   
+                            min = eval;   
+                            Move.moveList.From = DiceFrom;   
+                            Move.moveList.To = DiceFrom + pos[i];   
+                        }   
+                    }   
+                }   
+            }
+            
+            return Move;   
+        }   
+           
+        public MoveListAndCount CreateGreenMove(int Dice,MoveListAndCount Move)   
+        {   
+            int m = Dice,i,min = 200,eval;   
+            while(m < 13 && !Stone[m].IsExist)   
+            {   
+                m++;   
+            }   
+            for(i=0;i<3;i++)   
+            {   
+                if(m<13 && IsGreenVaild(m,Stone[m].Position,Stone[m].Position - pos[i]))   
+                {   
+                    int ToDice = Board[Stone[m].Position - pos[i]],DiceFrom = Stone[m].Position;   
+                    MakeMove(Stone[m].Position,Stone[m].Position - pos[i]);   
+                    if(IsGreenWin())   
+                    {   
+                        UnMakeMove(m,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                        Move.moveList.From =  Stone[m].Position;   
+                        Move.moveList.To = Move.moveList.From - pos[i];   
+                        return Move;   
+                    }   
+                    eval = GreenEval();   
+                    UnMakeMove(m,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                    if(min > eval)   
+                    {   
+                        min = eval;   
+                        Move.moveList.From =  Stone[m].Position;   
+                        Move.moveList.To = Move.moveList.From - pos[i];   
+                    }   
+                }   
+            }   
+            if(m == Dice)   
+                return Move;   
+            int n =Dice -1;   
+            while(n > 6 && !Stone[n].IsExist)   
+            {   
+                n--;   
+            }   
+            for(i=0;i<3;i++)   
+            {   
+                if(n>6 && IsGreenVaild(n,Stone[n].Position,Stone[n].Position - pos[i]))   
+                {   
+                    int ToDice = Board[Stone[n].Position - pos[i]],DiceFrom = Stone[n].Position;   
+                    MakeMove(Stone[n].Position,Stone[n].Position - pos[i]);   
+                    if(IsGreenWin())   
+                    {   
+                        UnMakeMove(n,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                        Move.moveList.From =  Stone[n].Position;   
+                        Move.moveList.To = Move.moveList.From - pos[i];   
+                        return Move;   
+                    }   
+                    eval = GreenEval();   
+                    UnMakeMove(n,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                    if(min > eval)   
+                    {   
+                        min = eval;   
+                        Move.moveList.From =  Stone[n].Position;   
+                        Move.moveList.To = Move.moveList.From - pos[i];   
+                    }   
+                }   
+            }   
+            return Move;   
+        }   
+       
+        /*给一个索引Dice表示要尝试走的棋(传进来的Move为了记录Count,BuleMoveList里面有几个能走的)
+         * 主要分为两种情况,这个棋子有:把三种情况放入bluemovelist    这个棋子没有,先放一个大于他的,再放一个小于他的*/
+         /**
+          *   给一个骰子数,给所有的可能节点对放入BlueMoveList中,用Move.count记录放入数量*/
+        public MoveListAndCount BlueAloneMove(int Dice,MoveListAndCount Move)   
+        {   
+            int m = Dice;
+            int i,ToDice,DiceFrom;   
+            Move.Count = 0;   	//Move.Count 清零
+            while(m<7 && !Stone[m].IsExist) //骰子数小于7并且这个棋子已经不在了,m++ 直到等于7  
+            {   
+                m++;   
+            }   
+               
+            /*循环了三次,把能走的都放在了BlueMoveList数组里面*/
+            for(i=0;i<3;i++)   
+            {   //三个方向都试一遍,如果能走就进行处理
+                if(m<7 && IsBlueVaild(m,Stone[m].Position,Stone[m].Position+pos[i]))   
+                {   
+                	/*把它们放到BlueMoveList 数组里面,存下所有能走的可能起点终点*/
+                    BlueMoveList[Move.Count].From = Stone[m].Position;   
+                    BlueMoveList[Move.Count].To = Stone[m].Position+pos[i];  
+                    
+                    DiceFrom = Stone[m].Position;   
+                    ToDice = Board[Stone[m].Position+pos[i]]; 
+                    
+//                  相当于尝试走,试试走后的位置能不能赢 
+                    MakeMove(Stone[m].Position , Stone[m].Position+pos[i]); 
+                    if(IsBlueWin())   
+                    {   
+                    	/*如果赢了,就把这个结果返回去,这个就是要走的*/
+                        UnMakeMove(m,ToDice,DiceFrom,DiceFrom+pos[i]);   
+                        Move.moveList.From = Stone[m].Position;   
+                        Move.moveList.To = Stone[m].Position+pos[i];   
+                        Move.Count = 1;   
+                        return Move;   
+                    }   
+                    UnMakeMove(m,ToDice,DiceFrom,DiceFrom+pos[i]);  
+                    
+                    Move.moveList.From = Stone[m].Position;   
+                    Move.moveList.To = Stone[m].Position+pos[i];   
+                    Move.Count++;   
+                }   
+            }   
+            
+            
+            if(m == Dice)   			//moveList已经写好了(只有这个棋子的走法能进入movelist)  movelist是类内全局
+                return Move;
+            
+            int n = Dice -1;   //如果这个棋不在,尝试比这个棋子小的棋   
+            while(n>0 && !Stone[n].IsExist)   	//如果不存在,再小一个,直到找到或者令n=0
+            {   
+                n--;   
+            }
+            
+            /*重复上述m的过程*/
+            for(i=0;i<3;i++)   
+            {   
+                if(n>0 && IsBlueVaild(n,Stone[n].Position,Stone[n].Position+pos[i]))   
+                {   
+                    BlueMoveList[Move.Count].From = Stone[n].Position;   
+                    BlueMoveList[Move.Count].To = Stone[n].Position+pos[i];   
+                    ToDice = Board[Stone[n].Position+pos[i]];   
+                    DiceFrom = Stone[n].Position;   
+                    MakeMove(Stone[n].Position,Stone[n].Position+pos[i]);   
+                    if(IsBlueWin())   
+                    {   
+                        UnMakeMove(n,ToDice,DiceFrom,DiceFrom+pos[i]);   
+                        Move.moveList.From = Stone[n].Position;   
+                        Move.moveList.To = Stone[n].Position+pos[i];   
+                        Move.Count = 1;   
+                        return Move;   
+                    }   
+                    UnMakeMove(n,ToDice,DiceFrom,DiceFrom+pos[i]);   
+                    Move.moveList.From = Stone[n].Position;   
+                    Move.moveList.To = Stone[n].Position+pos[i];   
+                    Move.Count++;   
+                }   
+            }
+            
+            return Move;   
+        }
+        
+        
+        /*核心函数*/
+         
+        /**
+         * 通过BlueAloneMove 将Dice骰子数时的所有蓝色棋可能得走法放入bluemovelist中,之后对这个bluemovelist数组中的走法进行选择
+         * 选择出一个权重最小的
+         * @param Dice
+         * @param Move	
+         * @param size	传进来的参数
+         * @return		相对于Dice的一种最佳的走法
+         */
+        public MoveListAndCount BlueMcEval(int Dice,MoveListAndCount Move,int size) 	  
+        {   
+//        	返回move的意义在于move中存储了Count,共多少种情况
+//        	通过BlueAloneMove 将Dice骰子数时的所有蓝色棋可能得走法放入bluemovelist[]中	
+            Move = BlueAloneMove(Dice,Move); 		
+            int i,num=0,Rand,winnum,max=0;   
+            MoveListAndCount move = new MoveListAndCount();    
+            
+            if(Move.Count == 0 || Move.Count == 1)   //只有一种情况或者没有,不用选了,直接返回
+            {   
+                return Move;   
+            }   
+           
+            CopyBoard();   //相当于备份棋盘
+               
+            for(i=0;i<Move.Count;i++)   
+            {   
+                num=0;   
+                winnum = 0;   
+                while(num < size)   
+                {   
+                    UnCopyBoard();   //将上次尝试的棋盘复原一下
+                    
+                    /*尝试走一下这种情况*/
+                    MakeMove(BlueMoveList[i].From , BlueMoveList[i].To);
+                    /*只有第一步是我们的可能选择,之后死循环,绿色走一步,蓝色走一步,直到最后有一方赢
+                    	看size局中,蓝色棋赢的次数*/
+                    while(true)   
+                    {   
+                        Rand = GetGreenDice();   //模拟人下一次会丢出什么骰子
+                        move = CreateGreenMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsGreenWin())   
+                        {   
+                            num++;   
+                            break;   
+                        }   
+                        Rand = GetBlueDice();   
+                        move = CreateBlueMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsBlueWin())   
+                        {   
+                            num++;   
+                            winnum++;   
+                            break;   
+                        }   
+                    }
+                    
+                }   
+                Num[i].WinSum = winnum;   //将胜利的局数记录在Num数组中
+                Num[i].Move.From = BlueMoveList[i].From;  
+                Num[i].Move.To = BlueMoveList[i].To;  
+                /*不能用引用变量"浅拷贝"*/
+//                Num[i].Move = BlueMoveList[i]; 
+                
+                
+                if(winnum>max)   
+                {   
+                	/*找出bluemovelist数组中可能情况中,winnum最大的,并记录Move(最为结果返回值)*/
+                    max = winnum;   
+                    Move.moveList.From = BlueMoveList[i].From;         
+                    Move.moveList.To = BlueMoveList[i].To;   
+                }   
+                UnCopyBoard();   //还没走呢,只是尝试,返回之前要记得复原棋盘
+            }   
+            return Move;   
+        }   
+           
+        public MoveListAndCount GreenAloneMove(int Dice,MoveListAndCount Move)   
+        {   
+            int i,m = Dice,ToDice,DiceFrom;   
+            Move.Count = 0;   
+            while(m<13 && !Stone[m].IsExist)   
+            {   
+                m++;   
+            }   
+               
+            for(i=0;i<3;i++)   
+            {   
+                if(m<13 && IsGreenVaild(m,Stone[m].Position,Stone[m].Position - pos[i]))   
+                {   
+                    GreenMoveList[Move.Count].From = Stone[m].Position;   
+                    GreenMoveList[Move.Count].To = Stone[m].Position - pos[i];   
+                    ToDice = Board[Stone[m].Position - pos[i]];   
+                    DiceFrom = Stone[m].Position;   
+                    MakeMove(Stone[m].Position,Stone[m].Position - pos[i]);   
+                    if(IsGreenWin())   
+                    {   
+                        UnMakeMove(m,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                        Move.moveList.From = Stone[m].Position;   
+                        Move.moveList.To = Stone[m].Position - pos[i];   
+                        Move.Count = 1;   
+                        return Move;   
+                    }   
+                    UnMakeMove(m,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                    Move.moveList.From = Stone[m].Position;   
+                    Move.moveList.To = Stone[m].Position - pos[i];   
+                    Move.Count++;   
+                }   
+            }   
+           
+            if(m == Dice)   
+                return Move;   
+            int n = Dice -1;   
+            while(n>6 && !Stone[n].IsExist)   
+            {   
+                n--;   
+            }   
+            for(i=0;i<3;i++)   
+            {   
+                if(n>6 && IsGreenVaild(n,Stone[n].Position,Stone[n].Position - pos[i]))   
+                {   
+                    GreenMoveList[Move.Count].From = Stone[n].Position;   
+                    GreenMoveList[Move.Count].To = Stone[n].Position - pos[i];   
+                    ToDice = Board[Stone[n].Position - pos[i]];   
+                    DiceFrom = Stone[n].Position;   
+                    MakeMove(Stone[n].Position,Stone[n].Position - pos[i]);   
+                    if(IsGreenWin())   
+                    {   
+                        UnMakeMove(n,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                        Move.moveList.From = Stone[n].Position;   
+                        Move.moveList.To = Stone[n].Position - pos[i];   
+                        Move.Count = 1;   
+                        return Move;   
+                    }   
+                    UnMakeMove(n,ToDice,DiceFrom,DiceFrom - pos[i]);   
+                    Move.moveList.From = Stone[n].Position;   
+                    Move.moveList.To = Stone[n].Position - pos[i];   
+                    Move.Count++;   
+                }   
+            }   
+            return Move;   
+        }   
+           
+        public MoveListAndCount GreenMcEval(int Dice,MoveListAndCount Move,int size)   
+        {   
+            Move = GreenAloneMove(Dice,Move);   
+            int i,num=0,winnum=0,max=0,Rand;   
+            MoveListAndCount move = new MoveListAndCount();   
+            if(Move.Count == 0 || Move.Count == 1)   
+            {   
+                return Move;   
+            }   
+           
+            CopyBoard();   
+               
+            for(i=0;i<Move.Count;i++)   
+            {   
+                num=0;   
+                winnum = 0;   
+                while(num < size)   
+                {   
+                    UnCopyBoard();   
+                    MakeMove(GreenMoveList[i].From,GreenMoveList[i].To);   
+                    while(true)   
+                    {   
+                        Rand = GetBlueDice();   
+                        move = CreateBlueMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsBlueWin())   
+                        {   
+                            num++;   
+                            break;   
+                        }   
+                        Rand = GetGreenDice();   
+                        move = CreateGreenMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsGreenWin())   
+                        {   
+                            winnum++;   
+                            num++;   
+                            break;   
+                        }   
+                    }   
+                }   
+                if(winnum>max)   
+                {   
+                    max = winnum;   
+                    Move.moveList.From = GreenMoveList[i].From;   
+                    Move.moveList.To = GreenMoveList[i].To;   
+                }   
+                UnCopyBoard();   
+            }   
+            return Move;   
+        }   
+       
+        public MoveListAndCount BlueMcRand(int Dice,MoveListAndCount Move,int size)   
+        {   
+            Move = BlueAloneMove(Dice,Move);   
+            int i,num=0,winnum=0,max=0,Rand;   
+            MoveListAndCount move = new MoveListAndCount();   
+            if(Move.Count == 0 || Move.Count == 1)   
+            {   
+                return Move;   
+            }   
+           
+            CopyBoard();   
+            MoveList[] BML = new MoveList[Move.Count];   
+            for(i=0;i<Move.Count;i++)   
+            {   
+                BML[i] = new MoveList();   
+                BML[i] = BlueMoveList[i];   
+            }   
+            for(i=0;i<Move.Count;i++)   
+            {   
+                num=0;   
+                winnum = 0;   
+                while(num < size)   
+                {   
+                    UnCopyBoard();   
+                    MakeMove(BML[i].From,BML[i].To);   
+                    while(true)   
+                    {   
+                        Rand = GetGreenDice();   
+                        move = CreateGreenRandMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsGreenWin())   
+                        {   
+                            num++;   
+                            break;   
+                        }   
+                        Rand = GetBlueDice();   
+                        move = CreateBlueRandMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsBlueWin())   
+                        {   
+                            num++;   
+                            winnum++;   
+                            break;   
+                        }   
+                    }   
+                }   
+                if(winnum>max)   
+                {   
+                    max = winnum;   
+                    Move.moveList.From = BML[i].From;   
+                    Move.moveList.To = BML[i].To;   
+                }   
+                UnCopyBoard();   
+            }   
+            return Move;   
+        }   
+           
+           
+        public MoveListAndCount GreenMcRand(int Dice,MoveListAndCount Move,int size)   
+        {   
+            Move = GreenAloneMove(Dice,Move);   
+            int i,num=0,Rand,winnum,max=0;   
+            if(Move.Count == 0 || Move.Count == 1)   
+            {   
+                return Move;   
+            }   
+           
+            CopyBoard();   
+            MoveListAndCount move = new MoveListAndCount();   
+            MoveList[] GML = new MoveList[Move.Count];   
+            for(i=0;i<Move.Count;i++)   
+            {   
+                GML[i] = new MoveList();   
+                GML[i] = GreenMoveList[i];   
+            }   
+            for(i=0;i<Move.Count;i++)   
+            {   
+                num=0;   
+                winnum = 0;   
+                while(num < size)   
+                {   
+                    UnCopyBoard();   
+                    MakeMove(GML[i].From,GML[i].To);   
+                    while(true)   
+                    {   
+                        Rand = GetBlueDice();   
+                        move = CreateBlueRandMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsBlueWin())   
+                        {   
+                            num++;   
+                            break;   
+                        }   
+                        Rand = GetGreenDice();   
+                        move = CreateGreenRandMove(Rand,move);   
+                        MakeMove(move.moveList.From,move.moveList.To);   
+                        if(IsGreenWin())   
+                        {   
+                            winnum++;   
+                            num++;   
+                            break;   
+                        }   
+                    }   
+                }   
+                if(winnum>max)   
+                {   
+                    max = winnum;   
+                    Move.moveList.From = GML[i].From;   
+                    Move.moveList.To = GML[i].To;   
+                }   
+                UnCopyBoard();   
+            }   
+            return Move;   
+        }   
+    }  
+
+
+
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+
+
+
+    @SuppressWarnings("serial")
+	public class Pro extends JFrame implements ActionListener ,Runnable
+    {   
+        /**
+         * 输出提示信息   
+         */
+    	Object lock = null;
+    	public boolean flag = true;
+    	private boolean ok = false;
+    	JLabel label=null;
+    	private MoveListAndCount move = null;
+    	int[] Borad= null;
+    	public void setLabel(int i) {
+    		label.setText("  当前骰子数:  " + i);
+    	}
+    	
+    	MoveListAndCount getMove() {
+    		return move;
+    	}
+
+    	public void setBorad(int[] Borad) {
+    		this.Borad = Borad;
+    	}
+    	
+    	public void run() {
+    		while(flag) {
+    			
+    			synchronized (lock){
+//    				System.out.println("gui拿到锁了");
+    				if(ok) {
+    					System.out.println("gui进入ok了");
+    					lock.notifyAll();
+    					System.out.println("此时:");
+    					System.out.println(move.moveList.From);
+    					System.out.println(move.moveList.To);
+    					try {
+							lock.wait();
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+    					
+    					ok=false;
+    				}
+    				
+    			}//就算拿到锁,走一全还是出去了
+    			
+    		}
+    	}
+    	
+
+    	JButton[] key= new JButton[25];
+    	int pushnum=0;
+    	int kfrom = -1, kto = -1;
+    	
+        Pro(String title,Object lock){
+        	super(title);
+        	this.lock=lock;
+//        	this.Borad=Borad
+        	move = new MoveListAndCount();
+        	ui();
+        	this.setLocation(400,150);
+//        	this.pack();
+        	this.setSize(550,400);
+//        	this.setResizable(false);
+        }
+        
+        
+        public void ui(){
+//        	Image AYST =GameUtil.getImage("images/AYST.png");
+        	Icon AYST = new ImageIcon("images/6.png");
+        	System.out.println(AYST);
+        	label = new JLabel();
+        	label.setFont(new Font(null, Font.BOLD, 18));
+        	JLabel pic = new JLabel("欢迎游戏爱因斯坦棋   ");	
+        	pic.setFont(new Font(null, Font.BOLD, 14));
+//        	JLabel.setFont(new Font(null, Font.BOLD, 23));
+        	pic.setSize(106,106);
+        	JPanel keypanel = new JPanel();
+        	
+        	JPanel picpanel = new JPanel();
+        	picpanel.add(pic);
+        	picpanel.add(label);
+        	
+        	keypanel.setLayout(new GridLayout(5,5));
+        	picpanel.setLayout(new GridLayout(2,1));
+        	picpanel.setSize(300,400);
+
+        	
+        	for(int i=0;i<25;i++) {
+        		key[i]=new JButton();
+        		key[i].setFont(new Font(null, Font.BOLD, 16));
+        		key[i].addActionListener(this);
+        	}
+        	for(int i=0;i<25;i++) {
+        		keypanel.add(key[i]);
+        	}
+        	this.setLayout(new BorderLayout());
+        	this.add(keypanel,"Center");
+        	this.add(picpanel,BorderLayout.EAST);
+        	
+        	
+        }
+        
+
+
+	public void actionPerformed(ActionEvent e) {
+		
+			int i;
+			for (i = 0; i < 25; i++) {
+				if (key[i] == (JButton) e.getSource()) {
+					System.out.println("被点击的是" + i);
+					break;
+				}
+			}
+			if(pushnum==0) {
+				System.out.println("pushnum==0");
+				move.moveList.From = i;
+				System.out.println("move.moveList.From :" +move.moveList.From);
+			}
+			if(pushnum==1) {
+				System.out.println("pushnum==1");
+				move.moveList.To=i;
+				ok=true;
+			}
+			pushnum=(pushnum+1)%2;
+		}
+
+	
+	
+	public void refresh() {
+		for (int i = 0; i < 25; i++) {
+			if (Borad[i] != 0) {
+				if (Borad[i] < 7) {
+					key[i].setText(" B" + Borad[i]);
+					key[i].setBackground(Color.GRAY);
+				} else {
+					key[i].setText(" G" + (Borad[i]-6));
+					key[i].setBackground(Color.GREEN);
+				}
+			} else {
+				key[i].setText(null);
+				key[i].setBackground(null);
+			}
+		}
+	}
+
+           
+    }  
+import javax.swing.JFrame;
+    
+    public class Windows implements Runnable  
+    {   
+        /**
+         * 输出提示信息   
+         */
+    	static int a,b;
+    	static Object lock = null;
+    	
+    	public void run() {
+    		
+    		
+    	}
+    	
+    	
+    	
+    	
+        static void user()   
+        {   
+            System.out.println("坐标索引表:\n"+   
+                                                "0  1   2   3   4\n"+   
+                                                "5  6   7   8   9\n"+   
+                                                "10 11  12  13  14\n"+   
+                                                "15 16  17  18  19\n"+   
+                                                "20 21  22  23  24");   
+        }
+        
+        public static void main(String[] args)   
+        {   
+        	lock = new Object();
+        	/*创建界面*/
+    		Pro gui = new Pro("爱因斯坦棋",lock);
+    		gui.setVisible(true);
+    		gui.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        	/*创建界面*/
+        	new Thread(gui).start();
+        	
+        	
+        	int[] Board = new int[25];   //模拟棋盘
+        	
+            /*四个结果*/  
+            MoveListAndCount move  = new MoveListAndCount();   
+               
+            int dice;   
+//            int sum = 400000;   
+            int sum = 400000;   
+//            int sum = 200000;   
+            
+            /*三个子线程有一个计算函数,主线程自己也参与计算*/
+            McSearch game = new McSearch();   
+               
+            GameThread game1;   
+            GameThread game2;   
+            GameThread game3; 
+               
+               
+            game1 = new GameThread();   
+            game2 = new GameThread();   
+            game3 = new GameThread(); 
+            
+ 
+            
+            Board = game.getBoard();		//把主线程的棋盘赋给其他线程,四个线程分析同一棋盘   
+            while(true)   
+            {   
+                user();   
+               
+                game1.setBoard(Board);   
+                game2.setBoard(Board);   
+                game3.setBoard(Board);
+                gui.setBorad(Board);
+                   
+                Thread th1;   
+                Thread th2;   
+                Thread th3;   
+                   
+                game.Print(); 		//绘制当前棋盘 
+                gui.refresh();
+                
+                if(game.IsGreenWin())   
+                {   
+                    System.out.println("Green is Win!");   
+                    System.exit(0);   
+                }   
+                   
+                /*模拟电脑下棋*/
+                dice = game.GetBlueDice();   
+                System.out.println("Blue Move!Dice=:"+dice);   
+                   
+                game1.SetDice(dice);   
+                game2.SetDice(dice);   
+                game3.SetDice(dice);   
+                   
+                /*设置参数*/
+                game1.SetGameNum(sum/4);   
+                game2.SetGameNum(sum/4);   
+                game3.SetGameNum(sum/4);   
+                   
+                th1 = new Thread(game1);   
+                th2 = new Thread(game2);   
+                th3 = new Thread(game3);   
+                   
+                th1.start();   
+                th2.start();   
+                th3.start();   
+                   
+                move = game.BlueMcEval(dice,move,sum/4);   //主线程的结果
+               
+                while(th1.isAlive() || th2.isAlive() || th3.isAlive());   
+                   
+                int allsum = 0;   
+                int max = 0;
+                
+                for(int i=0;i<move.Count;i++)   
+                {   
+                	/*allsum 把四个线程的sum加到一起*/
+                    allsum = game1.search.Num[i].WinSum+game2.search.Num[i].WinSum+game3.search.Num[i].WinSum+game.Num[i].WinSum;   
+             
+                    /*选出一个最大的sum*/
+                    if(allsum>max)   
+                    {   
+                        max = allsum;   
+                        move.moveList.From = game1.search.Num[i].Move.From;   
+                        move.moveList.To = game1.search.Num[i].Move.To;   
+                    }   
+                }   
+                   
+                
+                while(!game.IsBlueVaild(dice,move.moveList.From,move.moveList.To))   
+                {   
+                    System.out.println("Error");   
+                    synchronized(lock) {
+                    	lock.notifyAll();
+                    	try {
+    						lock.wait();
+    					} catch (InterruptedException e) {
+    						// TODO Auto-generated catch block
+    						e.printStackTrace();
+    					}
+                    	
+                    	System.out.println("等待赋值");
+                    	move=gui.getMove();
+                    	System.out.println("赋值结束");
+                    	
+                    }
+                }   
+                
+                /*四个线程虽然传入的board是同一个board,但各自存放自己的Stone(棋子的状态)*/
+                game.MakeMove(move.moveList.From,move.moveList.To);   
+                game1.search.MakeMove(move.moveList.From,move.moveList.To);   
+                game2.search.MakeMove(move.moveList.From,move.moveList.To);   
+                game3.search.MakeMove(move.moveList.From,move.moveList.To);   
+                game.Print();   
+                gui.refresh();
+                
+                if(game.IsBlueWin())   
+                {   
+                    System.out.println("Blue is Win!");
+                    gui.flag=false;	//run结束
+                    System.exit(0);   
+                }   
+                   
+//                System.out.println("\n\n");   
+                   
+                user();    
+                dice  = game.GetGreenDice();   
+                System.out.println("Green Move!Dice=:"+(dice-6));   
+                gui.setLabel(dice-6);
+                
+                synchronized(lock) {
+                	lock.notifyAll();
+                	try {
+						lock.wait();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+                	
+                	System.out.println("等待赋值");
+                	move=gui.getMove();
+                	System.out.println("赋值结束");
+                	
+                }
+//                move.moveList.From = input.nextInt();   
+//                move.moveList.To = input.nextInt();   
+                   
+                while(!game.IsGreenVaild(dice,move.moveList.From,move.moveList.To))   
+                {   
+                    System.out.println("Error");   
+                    synchronized(lock) {
+                    	lock.notifyAll();
+                    	try {
+    						lock.wait();
+    					} catch (InterruptedException e) {
+    						// TODO Auto-generated catch block
+    						e.printStackTrace();
+    					}
+                    	
+                    	System.out.println("等待赋值");
+                    	move=gui.getMove();
+                    	System.out.println("赋值结束");
+                    	
+                    }
+                }   
+                game.MakeMove(move.moveList.From,move.moveList.To);   
+                game1.search.MakeMove(move.moveList.From,move.moveList.To);   
+                game2.search.MakeMove(move.moveList.From,move.moveList.To);   
+                game3.search.MakeMove(move.moveList.From,move.moveList.To);   
+                   
+                game.Print();
+                gui.refresh();
+                   
+            }/*while(true)*/   
+               
+        }   
+
+        
+    }
+    
+    /*sum(move.count)是当前骰子数能走的情况(一般是三种,但这个棋如果被吃了的话,就是离他最近的两个棋走,就是六种)*/
+//    System.out.println("Main Thread Sum:"+move.Count);   
+//    System.out.println("Thread1 Sum:"+move1.Count+" Thread2 Sum:"+move2.Count+"Thread3 Sum:"+move3.Count);  
+//    
+//    
+//    
+//    System.out.println("Main Thread i:"+i+" Sum:"+game.Num[i].WinSum+" Move:("+game.Num[i].Move.From+","+game.Num[i].Move.To+")");   
+//    System.out.println("Thread1 i:"+i+" Sum:"+game1.search.Num[i].WinSum+" Move:("+game1.search.Num[i].Move.From+","+game1.search.Num[i].Move.To+")");   
+//    System.out.println("Thread2 i:"+i+" Sum:"+game2.search.Num[i].WinSum+" Move:("+game2.search.Num[i].Move.From+","+game2.search.Num[i].Move.To+")");   
+//    System.out.println("Thread3 i:"+i+" Sum:"+game3.search.Num[i].WinSum+" Move:("+game3.search.Num[i].Move.From+","+game3.search.Num[i].Move.To+")");   
+//    System.out.println("Count:"+i+" WinSum:"+allsum);
+    
+//  int[] n = {0,0,0,0,0,0,0};   
+//  for(int i=0;i<10;i++)   
+//  {   
+//      n[game.GetBlueDice()]++;   
+//  }   
+//  for(int i=1;i<7;i++)   
+//  {   
+//      System.out.println(i+":"+n[i]);   
+//  }  
+ 
+//    System.out.println("Search Finish!");   
+    
+    
+    
+    /* */
+//    move1 = game1.ReturnMove();   
+//    move2 = game2.ReturnMove();   
+//    move3 = game3.ReturnMove();   
+    
+//    MoveListAndCount move1 = new MoveListAndCount();   
+//    MoveListAndCount move2 = new MoveListAndCount();   
+//    MoveListAndCount move3 = new MoveListAndCount();   
